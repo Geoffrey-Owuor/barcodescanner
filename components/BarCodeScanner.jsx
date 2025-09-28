@@ -101,20 +101,14 @@
 //         cropHeight,
 //       );
 
-//       overlayDiv.style.position = "absolute";
 //       overlayDiv.style.left = `${(cropX / video.videoWidth) * 100}%`;
 //       overlayDiv.style.top = `${(cropY / video.videoHeight) * 100}%`;
 //       overlayDiv.style.width = `${(cropWidth / video.videoWidth) * 100}%`;
 //       overlayDiv.style.height = `${(cropHeight / video.videoHeight) * 100}%`;
-//       overlayDiv.style.border = "2px solid white";
-//       overlayDiv.style.borderRadius = "0.5rem";
-//       overlayDiv.style.pointerEvents = "none";
-//       overlayDiv.style.boxSizing = "border-box";
 
 //       const decodeCanvas = async () => {
 //         try {
-//           const result =
-//             await codeReader.current.decodeFromCanvas(displayCanvas);
+//           const result = codeReader.current.decodeFromCanvas(displayCanvas);
 //           console.log("Decoded barcode:", result.getText());
 //           setBarcodeResult(result.getText());
 //         } catch (err) {
@@ -139,12 +133,11 @@
 //   }, []);
 
 //   return (
-//     <div className="flex flex-col items-center font-sans">
-//       <h2 className="mb-4 text-xl font-bold text-gray-800">
-//         Camera View for Barcode Scanning
-//       </h2>
+//     <div className="flex flex-col items-center p-4 font-sans">
+//       <h2 className="mb-4 text-xl font-bold text-gray-800">Barcode Scanner</h2>
 
-//       <div className="relative w-full max-w-md overflow-hidden">
+//       {/* Camera Container */}
+//       <div className="relative aspect-[3/4] w-full max-w-sm overflow-hidden rounded-xl border border-gray-300 shadow-lg">
 //         <video
 //           ref={videoRef}
 //           autoPlay
@@ -152,17 +145,25 @@
 //           muted
 //           className="h-full w-full object-cover"
 //         />
-//         <div ref={cropOverlayRef}></div>
+
+//         {/* Scanning Overlay */}
+//         <div
+//           ref={cropOverlayRef}
+//           className="absolute overflow-hidden rounded-lg border-2 border-white"
+//         >
+//           {/* Animated scanning line */}
+//           <div className="animate-scan absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-green-400 via-emerald-500 to-green-400"></div>
+//         </div>
 //       </div>
 
 //       {error && <p className="mt-4 text-sm text-red-500">{error}</p>}
 
 //       <p className="mt-2 text-center text-sm text-gray-600">
-//         Camera active. The white border indicates the barcode scanning area.
+//         Align the barcode inside the white box to scan.
 //       </p>
 
 //       <h3 className="mt-6 mb-2 text-lg font-semibold text-gray-800">
-//         Cropped Barcode Scan Area:
+//         Cropped Scan Preview
 //       </h3>
 
 //       <canvas
@@ -172,12 +173,8 @@
 //         Your browser does not support the canvas element.
 //       </canvas>
 
-//       <p className="mt-2 text-xs text-gray-400">
-//         This canvas updates every 0.1 seconds with the focused area.
-//       </p>
-
-//       <div className="mt-4 mb-8 w-full max-w-md rounded-md border-2 border-dashed border-emerald-500 bg-emerald-50 p-4 text-center text-base font-medium text-emerald-900">
-//         ✅ Barcode: {barcodeResult}
+//       <div className="mt-4 w-full max-w-sm rounded-lg border-2 border-dashed border-emerald-500 bg-emerald-50 p-4 text-center text-base font-medium text-emerald-900">
+//         {barcodeResult ? `✅ Barcode: ${barcodeResult}` : "Waiting for scan..."}
 //       </div>
 //     </div>
 //   );
@@ -189,7 +186,8 @@ import { useEffect, useRef, useState } from "react";
 import { BrowserMultiFormatReader } from "@zxing/browser";
 
 const DESIRED_CROP_ASPECT_RATIO = 3 / 2;
-const CROP_SIZE_FACTOR = 0.4;
+// Slightly bigger overlay factor
+const CROP_SIZE_FACTOR = 0.7;
 
 export default function BarCodeScanner() {
   const videoRef = useRef(null);
@@ -198,8 +196,11 @@ export default function BarCodeScanner() {
   const [error, setError] = useState(null);
   const [barcodeResult, setBarcodeResult] = useState(null);
   const codeReader = useRef(new BrowserMultiFormatReader());
+  const [scanning, setScanning] = useState(true);
 
   useEffect(() => {
+    if (!scanning) return;
+
     let intervalId = null;
 
     const startCamera = async () => {
@@ -211,7 +212,7 @@ export default function BarCodeScanner() {
           videoRef.current.srcObject = stream;
           videoRef.current.onloadedmetadata = () => {
             videoRef.current.play();
-            intervalId = setInterval(captureFrameAndCrop, 100);
+            intervalId = setInterval(captureFrameAndCrop, 150);
           };
         }
       } catch (err) {
@@ -257,17 +258,6 @@ export default function BarCodeScanner() {
       cropWidth = Math.min(cropWidth, video.videoWidth);
       cropHeight = Math.min(cropHeight, video.videoHeight);
 
-      const MIN_CROP_WIDTH = 240;
-      const MAX_CROP_WIDTH = 600;
-      const MIN_CROP_HEIGHT = 80;
-      const MAX_CROP_HEIGHT = 400;
-
-      cropWidth = Math.max(MIN_CROP_WIDTH, Math.min(MAX_CROP_WIDTH, cropWidth));
-      cropHeight = Math.max(
-        MIN_CROP_HEIGHT,
-        Math.min(MAX_CROP_HEIGHT, cropHeight),
-      );
-
       const cropX = (video.videoWidth - cropWidth) / 2;
       const cropY = (video.videoHeight - cropHeight) / 2;
 
@@ -293,9 +283,11 @@ export default function BarCodeScanner() {
 
       const decodeCanvas = async () => {
         try {
-          const result = codeReader.current.decodeFromCanvas(displayCanvas);
+          const result =
+            await codeReader.current.decodeFromCanvas(displayCanvas);
           console.log("Decoded barcode:", result.getText());
           setBarcodeResult(result.getText());
+          setScanning(false); // stop scanning once barcode is found
         } catch (err) {
           if (err instanceof Error && err.name !== "NotFoundException") {
             console.error("Decoding error:", err);
@@ -315,52 +307,72 @@ export default function BarCodeScanner() {
       }
       if (intervalId) clearInterval(intervalId);
     };
-  }, []);
+  }, [scanning]);
+
+  const handleScanAgain = () => {
+    setBarcodeResult(null);
+    setError(null);
+    setScanning(true);
+  };
 
   return (
     <div className="flex flex-col items-center p-4 font-sans">
       <h2 className="mb-4 text-xl font-bold text-gray-800">Barcode Scanner</h2>
 
-      {/* Camera Container */}
-      <div className="relative aspect-[3/4] w-full max-w-sm overflow-hidden rounded-xl border border-gray-300 shadow-lg">
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          muted
-          className="h-full w-full object-cover"
-        />
+      {/* Show scanning UI only if scanning */}
+      {scanning ? (
+        <>
+          {/* Smaller video container */}
+          <div className="relative aspect-[3/5] w-full max-w-sm overflow-hidden rounded-xl border border-gray-300 shadow-lg">
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              className="h-full w-full object-cover"
+            />
 
-        {/* Scanning Overlay */}
-        <div
-          ref={cropOverlayRef}
-          className="absolute overflow-hidden rounded-lg border-2 border-white"
-        >
-          {/* Animated scanning line */}
-          <div className="animate-scan absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-green-400 via-emerald-500 to-green-400"></div>
+            {/* Scanning Overlay */}
+            <div
+              ref={cropOverlayRef}
+              className="absolute overflow-hidden rounded-lg border-2 border-white"
+            >
+              {/* Animated scanning line */}
+              <div className="animate-scan absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-green-400 via-emerald-500 to-green-400"></div>
+            </div>
+          </div>
+
+          {error && <p className="mt-4 text-sm text-red-500">{error}</p>}
+
+          <p className="mt-2 text-center text-sm text-gray-600">
+            Align the barcode inside the white box to scan.
+          </p>
+
+          <h3 className="mt-6 mb-2 text-lg font-semibold text-gray-800">
+            Cropped Scan Preview
+          </h3>
+
+          <canvas
+            ref={displayCroppedCanvasRef}
+            className="block h-auto min-h-[80px] max-w-full min-w-[240px] rounded-md border-2 border-blue-500 shadow-md"
+          >
+            Your browser does not support the canvas element.
+          </canvas>
+        </>
+      ) : (
+        // Show result only when scanning stops
+        <div className="flex flex-col items-center space-y-4">
+          <div className="w-full max-w-sm rounded-lg border-2 border-emerald-500 bg-emerald-50 p-4 text-center text-lg font-semibold text-emerald-900 shadow">
+            ✅ Barcode: {barcodeResult}
+          </div>
+          <button
+            onClick={handleScanAgain}
+            className="rounded-lg bg-emerald-600 px-6 py-2 text-white shadow transition hover:bg-emerald-700"
+          >
+            Scan Again
+          </button>
         </div>
-      </div>
-
-      {error && <p className="mt-4 text-sm text-red-500">{error}</p>}
-
-      <p className="mt-2 text-center text-sm text-gray-600">
-        Align the barcode inside the white box to scan.
-      </p>
-
-      <h3 className="mt-6 mb-2 text-lg font-semibold text-gray-800">
-        Cropped Scan Preview
-      </h3>
-
-      <canvas
-        ref={displayCroppedCanvasRef}
-        className="block h-auto min-h-[80px] max-w-full min-w-[240px] rounded-md border-2 border-blue-500 shadow-md"
-      >
-        Your browser does not support the canvas element.
-      </canvas>
-
-      <div className="mt-4 w-full max-w-sm rounded-lg border-2 border-dashed border-emerald-500 bg-emerald-50 p-4 text-center text-base font-medium text-emerald-900">
-        {barcodeResult ? `✅ Barcode: ${barcodeResult}` : "Waiting for scan..."}
-      </div>
+      )}
     </div>
   );
 }
